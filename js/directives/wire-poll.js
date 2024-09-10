@@ -3,12 +3,17 @@ import Alpine from 'alpinejs'
 
 directive('poll', ({ el, directive }) => {
     let interval = extractDurationFrom(directive.modifiers, 2000)
+    let whenCondition = extractWhenCondition(directive.modifiers)
 
     let { start, pauseWhile, throttleWhile, stopWhen } = poll(() => {
         triggerComponentRequest(el, directive)
     }, interval)
 
     start()
+
+    if (whenCondition) {
+        pauseWhile(() => ! evaluateWhenDirective(el, whenCondition))
+    }
 
     throttleWhile(() => theTabIsInTheBackground() && theDirectiveIsMissingKeepAlive(directive))
     pauseWhile(() => theDirectiveHasVisible(directive) && theElementIsNotInTheViewport(el))
@@ -21,6 +26,18 @@ function triggerComponentRequest(el, directive) {
     Alpine.evaluate(el,
         directive.expression ? '$wire.' + directive.expression : '$wire.$commit()'
     )
+}
+
+function extractWhenCondition(modifiers) {
+    const whenModifier = modifiers.find(mod => mod.startsWith('when(') && mod.endsWith(')'))
+    if (whenModifier) {
+        return whenModifier.slice(5, -1) // Remove 'when(' and ')'
+    }
+    return null
+}
+
+function evaluateWhenDirective(el, condition) {
+    return Alpine.evaluate(el, condition)
 }
 
 function poll(callback, interval = 2000) {
