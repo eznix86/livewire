@@ -18,6 +18,8 @@ class BaseComputed extends Attribute
         public $persist = false,
         public $seconds = 3600, // 1 hour...
         public $cache = false,
+        public $flexible = true,
+        public $window = [1800, 3600], // Default window: 30 mins to 1 hour
         public $key = null,
         public $tags = null,
     ) {}
@@ -87,10 +89,11 @@ class BaseComputed extends Attribute
 
         $closure = fn () => $this->evaluateComputed();
 
-        return match(Cache::supportsTags() && !empty($this->tags)) {
-            true => Cache::tags($this->tags)->remember($key, $this->seconds, $closure),
-            default => Cache::remember($key, $this->seconds, $closure)
-        };
+        if ($this->flexible) {
+            return $this->cacheFlexible($key, $closure);
+        }
+
+        return $this->cacheRemember($key, $closure);
     }
 
     protected function handleCachedGet()
@@ -99,9 +102,26 @@ class BaseComputed extends Attribute
 
         $closure = fn () => $this->evaluateComputed();
 
+        if ($this->flexible) {
+            return $this->cacheFlexible($key, $closure);
+        }
+
+        return $this->cacheRemember($key, $closure);
+    }
+
+    protected function cacheRemember($key, $closure)
+    {
         return match(Cache::supportsTags() && !empty($this->tags)) {
             true => Cache::tags($this->tags)->remember($key, $this->seconds, $closure),
             default => Cache::remember($key, $this->seconds, $closure)
+        };
+    }
+
+    protected function cacheFlexible($key, $closure)
+    {
+        return match(Cache::supportsTags() && !empty($this->tags)) {
+            true => Cache::tags($this->tags)->flexible($key, $this->window, $closure),
+            default => Cache::flexible($key, $this->window, $closure)
         };
     }
 
